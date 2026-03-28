@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: pdf-print-ready-api
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    plan: free
+    healthCheckPath: /
