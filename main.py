@@ -26,7 +26,10 @@ A4_H = 841.89
 PT_TO_MM = 25.4 / 72
 
 
-# ─── Analyse ──────────────────────────────────────────
+@app.get("/")
+def root():
+    return {"status": "ok"}
+
 
 @app.post("/analyze")
 async def analyze(file: UploadFile = File(...)):
@@ -55,14 +58,12 @@ async def analyze(file: UploadFile = File(...)):
             non_a4 += 1
         pages_info.append({"page": i+1, "w_mm": w_mm, "h_mm": h_mm, "is_a4": is_a4})
 
-        # Images réelles dans la page
         for img in page.get_images(full=True):
             xref = img[0]
             try:
                 base = doc.extract_image(xref)
                 pil  = Image.open(io.BytesIO(base["image"]))
                 w_px, h_px = pil.size
-                # DPI réel : pixels / (points / 72)
                 dpi_x = w_px / (rect.width  / 72)
                 dpi_y = h_px / (rect.height / 72)
                 dpi   = round((dpi_x + dpi_y) / 2)
@@ -86,37 +87,35 @@ async def analyze(file: UploadFile = File(...)):
 
     if non_a4 > 0:
         score -= 25
-        recos.append({"type": "warn", "text": f"{non_a4} page(s) hors format A4 → conversion recommandée"})
+        recos.append({"type": "warn", "text": f"{non_a4} page(s) hors format A4"})
     if low_res_count > 0:
-        score -= min(30, low_res_count * 10)
+        score -= min(30, low_res_count * 5)
         recos.append({"type": "warn", "text": f"{low_res_count} image(s) en basse résolution ({min_dpi} DPI réel) → upscaling nécessaire"})
     if size_bytes > 10 * 1024 * 1024:
-        score -= 10
         recos.append({"type": "info", "text": f"Fichier lourd ({round(size_bytes/1024/1024,1)} MB) → compression recommandée"})
     if score >= 90:
         recos.append({"type": "ok", "text": "PDF en bon état pour l'impression"})
 
     return {
-        "file_id":      file_id,
-        "total_pages":  len(pages_info),
-        "size_mb":      round(size_bytes / 1024 / 1024, 2),
-        "pages":        pages_info,
-        "images":       images_info,
-        "non_a4_count": non_a4,
-        "low_res_count":low_res_count,
-        "min_dpi":      min_dpi,
-        "score":        max(0, score),
+        "file_id":       file_id,
+        "total_pages":   len(pages_info),
+        "size_mb":       round(size_bytes / 1024 / 1024, 2),
+        "pages":         pages_info,
+        "images":        images_info,
+        "non_a4_count":  non_a4,
+        "low_res_count": low_res_count,
+        "min_dpi":       min_dpi,
+        "score":         max(0, score),
         "recommendations": recos,
     }
 
-
-# ─── Optimisation ─────────────────────────────────────
 
 class OptimizeRequest(BaseModel):
     file_id: str
     convert_a4:      bool = True
     upscale_images:  bool = True
     convert_cmyk:    bool = True
+
 
 @app.post("/optimize")
 def optimize(req: OptimizeRequest):
@@ -128,7 +127,7 @@ def optimize(req: OptimizeRequest):
         current = src
         steps   = []
 
-        # ── ÉTAPE 1 : Conversion A4 + upscaling (pymupdf + rasterisation 300 DPI) ──
+        # Étape 1 : conversion A4 + rendu 150 DPI (rapide, dans le timeout Render free)
         if req.convert_a4 or req.upscale_images:
             step1 = os.path.join(tmp, "step1.pdf")
             doc_src = fitz.open(current)
@@ -136,47 +135,44 @@ def optimize(req: OptimizeRequest):
 
             for page in doc_src:
                 rect = page.rect
-
-                # Rasteriser la page à 300 DPI (upscaling réel des images)
-                mat = fitz.Matrix(300/72, 300/72)
+                # 150 DPI = bon compromis vitesse/qualité sur Render free
+                mat = fitz.Matrix(150/72, 150/72)
                 pix = page.get_pixmap(matrix=mat, colorspace=fitz.csRGB, alpha=False)
-
-                img_bytes = pix.tobytes("jpeg", jpg_quality=95)
+                img_bytes = pix.tobytes("jpeg", jpg_quality=90)
 
                 if req.convert_a4:
                     new_page = doc_out.new_page(width=A4_W, height=A4_H)
-                    margin   = 28.35
-                    avail_w  = A4_W - 2 * margin
-                    avail_h  = A4_H - 2 * margin
-                    ratio    = min(avail_w / rect.width, avail_h / rect.height)
+                    margin  = 28.35
+                    avail_w = A4_W - 2 * margin
+                    avail_h = A4_H - 2 * margin
+                    ratio   = min(avail_w / rect.width, avail_h / rect.height)
                     nw = rect.width  * ratio
                     nh = rect.height * ratio
                     x0 = (A4_W - nw) / 2
                     y0 = (A4_H - nh) / 2
-                    dest_rect = fitz.Rect(x0, y0, x0+nw, y0+nh)
+                    dest = fitz.Rect(x0, y0, x0+nw, y0+nh)
                 else:
-                    new_page  = doc_out.new_page(width=rect.width, height=rect.height)
-                    dest_rect = fitz.Rect(0, 0, rect.width, rect.height)
+                    new_page = doc_out.new_page(width=rect.width, height=rect.height)
+                    dest = fitz.Rect(0, 0, rect.width, rect.height)
 
-                new_page.insert_image(dest_rect, stream=img_bytes)
+                new_page.insert_image(dest, stream=img_bytes)
 
             doc_out.save(step1)
             doc_src.close()
             doc_out.close()
             current = step1
 
-            if req.convert_a4:      steps.append("Conversion A4 avec marges")
-            if req.upscale_images:  steps.append("Rendu 300 DPI (upscaling réel)")
+            if req.convert_a4:     steps.append("Conversion A4 avec marges")
+            if req.upscale_images: steps.append("Rendu 150 DPI (upscaling réel)")
 
-        # ── ÉTAPE 2 : Conversion CMYK + compression Ghostscript ──
+        # Étape 2 : Ghostscript CMYK + compression
         step2 = os.path.join(tmp, "step2.pdf")
         gs_args = [
             "gs", "-dBATCH", "-dNOPAUSE", "-dQUIET", "-dSAFER",
             "-sDEVICE=pdfwrite",
             "-dCompatibilityLevel=1.4",
-            "-dPDFSETTINGS=/printer",   # 300 DPI, qualité impression
+            "-dPDFSETTINGS=/ebook",  # plus rapide que /printer
             "-dEmbedAllFonts=true",
-            "-dSubsetFonts=true",
         ]
         if req.convert_cmyk:
             gs_args += [
@@ -185,33 +181,27 @@ def optimize(req: OptimizeRequest):
             ]
         gs_args += [f"-sOutputFile={step2}", current]
 
-        result = subprocess.run(gs_args, capture_output=True, text=True)
+        result = subprocess.run(gs_args, capture_output=True, text=True, timeout=60)
         if result.returncode == 0:
             current = step2
-            if req.convert_cmyk: steps.append("Conversion couleurs CMYK (Ghostscript)")
-            steps.append("Compression et optimisation finale (Ghostscript)")
-        else:
-            # Ghostscript a échoué → on garde quand même le résultat précédent
-            pass
+            if req.convert_cmyk: steps.append("Conversion couleurs CMYK")
+            steps.append("Compression Ghostscript")
 
-        # Copier le résultat final
         out_path = os.path.join(OUTPUT_DIR, f"{req.file_id}_optimized.pdf")
         shutil.copy(current, out_path)
 
     in_size  = os.path.getsize(src)
     out_size = os.path.getsize(out_path)
-    saved_pct = round((1 - out_size / in_size) * 100)
+    saved    = round((1 - out_size / in_size) * 100)
 
     return {
-        "download_url":   f"/download/{req.file_id}",
-        "steps_applied":  steps,
-        "original_mb":    round(in_size  / 1024 / 1024, 2),
-        "optimized_mb":   round(out_size / 1024 / 1024, 2),
-        "saved_percent":  max(0, saved_pct),
+        "download_url":  f"/download/{req.file_id}",
+        "steps_applied": steps,
+        "original_mb":   round(in_size  / 1024 / 1024, 2),
+        "optimized_mb":  round(out_size / 1024 / 1024, 2),
+        "saved_percent": max(0, saved),
     }
 
-
-# ─── Téléchargement ───────────────────────────────────
 
 @app.get("/download/{file_id}")
 def download(file_id: str):
@@ -219,8 +209,4 @@ def download(file_id: str):
     if not os.path.exists(path):
         raise HTTPException(404, "Fichier non trouvé")
     return FileResponse(path, media_type="application/pdf", filename="print-ready.pdf")
-
-
-@app.get("/")
-def root():
-    return {"status": "ok", "service": "PDF Print-Ready API"}
+    
