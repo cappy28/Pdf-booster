@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PDF Print-Ready</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet"/>
+<style>
+:root{--ink:#0f0e0c;--paper:#f5f0e8;--cream:#ede7d9;--accent:#c8410a;--soft:#7a7060;--ok:#2d6a4f;--warn:#b5451b;--info:#1a5276}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Mono',monospace;background:var(--paper);color:var(--ink);min-height:100vh;padding:40px 20px 80px}
+.wrap{max-width:640px;margin:0 auto}
+header{margin-bottom:48px;border-bottom:2px solid var(--ink);padding-bottom:20px}
+header .label{font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--soft);margin-bottom:6px}
+header h1{font-family:'Fraunces',serif;font-size:2.8rem;font-weight:700;line-height:1.05;letter-spacing:-.02em}
+header h1 em{font-style:italic;color:var(--accent)}
+header p{font-size:.8rem;color:var(--soft);margin-top:10px;line-height:1.7}
+.section-label{font-size:.65rem;letter-spacing:.2em;text-transform:uppercase;color:var(--soft);margin-bottom:10px}
+
+.config-box{background:white;border:1px solid var(--ink);padding:16px;margin-bottom:20px;border-radius:2px}
+.config-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.config-row input{flex:1;padding:10px 12px;border:1px solid #ccc;background:var(--paper);font-family:'DM Mono',monospace;font-size:.78rem;border-radius:2px;outline:none}
+.config-row input:focus{border-color:var(--accent)}
+.status-dot{width:10px;height:10px;border-radius:50%;background:#ccc;flex-shrink:0;transition:background .3s}
+.status-dot.ok{background:#48bb78}.status-dot.err{background:#f56565}.status-dot.checking{background:#ed8936}
+.config-hint{font-size:.72rem;color:var(--soft);line-height:1.6}
+#btn-wake{display:none;width:100%;padding:10px;margin-top:10px;background:#ed8936;color:white;border:none;border-radius:2px;font-family:'DM Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.05em}
+#btn-wake:hover{background:#dd7a2a}
+#btn-wake:disabled{opacity:.6;cursor:not-allowed}
+
+#drop-zone{border:2px solid var(--ink);border-radius:2px;padding:52px 24px;text-align:center;cursor:pointer;transition:background .2s;background:white;position:relative}
+#drop-zone::before{content:'';position:absolute;inset:4px;border:1px dashed var(--ink);opacity:.2;pointer-events:none}
+#drop-zone:hover:not(.disabled),#drop-zone.drag{background:var(--cream)}
+#drop-zone.disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
+.dz-icon{font-size:2.4rem;margin-bottom:14px;display:block}
+.dz-main{font-family:'Fraunces',serif;font-size:1.1rem;font-weight:300}
+.dz-main strong{font-weight:700}
+.dz-sub{font-size:.72rem;color:var(--soft);margin-top:8px}
+#file-input{display:none}
+
+#progress-wrap{display:none;margin-top:20px}
+.prog-track{background:var(--cream);border:1px solid var(--ink);height:8px;border-radius:99px;overflow:hidden}
+.prog-fill{height:100%;background:var(--ink);width:0%;transition:width .6s cubic-bezier(.4,0,.2,1);border-radius:99px}
+.prog-label{font-size:.78rem;color:var(--ink);margin-top:10px}
+.prog-sublabel{font-size:.7rem;color:var(--soft);margin-top:4px}
+
+#error-box{display:none;margin-top:16px;padding:16px;background:#fdf0ec;border:1px solid var(--accent);border-radius:2px;font-size:.8rem;color:var(--accent);line-height:1.7}
+#error-box strong{display:block;margin-bottom:4px}
+
+#report{display:none;margin-top:36px}
+.score-row{display:flex;align-items:flex-end;gap:16px;padding:20px 24px;background:var(--ink);color:var(--paper);border-radius:2px;margin-bottom:20px}
+.score-num{font-family:'Fraunces',serif;font-size:3.6rem;font-weight:700;line-height:1}
+.score-num.good{color:#a8e6cf}.score-num.med{color:#ffd166}.score-num.bad{color:#ff6b6b}
+.score-meta{flex:1}.score-title{font-size:.85rem;font-weight:500;margin-bottom:4px}
+.score-desc{font-size:.75rem;opacity:.6;line-height:1.5}
+
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px}
+.info-cell{padding:14px 16px;background:white;border:1px solid var(--cream)}
+.info-cell .val{font-family:'Fraunces',serif;font-size:1.3rem;font-weight:700}
+.info-cell .lbl{font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--soft);margin-top:2px}
+
+.reco-list{list-style:none;margin-bottom:24px}
+.reco-item{padding:11px 14px;border-left:3px solid;border-radius:0 2px 2px 0;font-size:.8rem;line-height:1.6;margin-bottom:6px;background:white}
+.reco-item.ok{border-color:var(--ok);color:var(--ok)}
+.reco-item.warn{border-color:var(--warn);color:var(--warn)}
+.reco-item.info{border-color:var(--info);color:var(--info)}
+
+.options-wrap{background:var(--cream);border:1px solid var(--ink);padding:20px;margin-bottom:20px;border-radius:2px}
+.opt-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.08);font-size:.82rem;cursor:pointer}
+.opt-row:last-child{border-bottom:none;padding-bottom:0}
+.opt-row:first-child{padding-top:0}
+.opt-check{width:20px;height:20px;border:2px solid var(--ink);border-radius:2px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.7rem;transition:background .15s}
+.opt-check.on{background:var(--ink);color:var(--paper)}
+
+.btn{display:block;width:100%;padding:16px;border:2px solid var(--ink);border-radius:2px;font-family:'DM Mono',monospace;font-size:.82rem;font-weight:500;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:all .15s;text-align:center;text-decoration:none}
+.btn-dark{background:var(--ink);color:var(--paper)}
+.btn-dark:hover:not(:disabled){background:var(--accent);border-color:var(--accent)}
+.btn-dark:disabled{opacity:.4;cursor:not-allowed}
+.btn-light{background:white;color:var(--ink);margin-top:10px}
+.btn-light:hover{background:var(--cream)}
+.btn-go{display:none;background:#1a7a4a;color:white;border-color:#1a7a4a;margin-top:10px}
+.btn-go:hover{background:#155f39;border-color:#155f39}
+
+.steps-box{display:none;margin:16px 0}
+.steps-box ul{list-style:none}
+.steps-box li{font-size:.75rem;color:var(--ok);padding:5px 0;border-bottom:1px solid var(--cream)}
+.steps-box li::before{content:'✓  '}
+footer{margin-top:60px;font-size:.68rem;color:var(--soft);letter-spacing:.08em;text-align:center;opacity:.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="label">Outil gratuit — Ghostscript · 300 DPI réel · CMYK</div>
+    <h1>PDF<br/><em>Print-Ready</em></h1>
+    <p>Analyse réelle · Upscaling 300 DPI · Conversion CMYK · Compression Ghostscript</p>
+  </header>
+
+  <div class="section-label">Connexion au backend</div>
+  <div class="config-box">
+    <div class="config-row">
+      <div class="status-dot" id="status-dot"></div>
+      <input type="text" id="api-url" placeholder="https://pdf-print-ready-api.onrender.com"/>
+      <button onclick="checkBackend()" style="padding:10px 14px;border:1px solid var(--ink);background:var(--cream);font-family:'DM Mono',monospace;font-size:.72rem;cursor:pointer;border-radius:2px;white-space:nowrap">Tester ↗</button>
+    </div>
+    <div class="config-hint" id="config-hint">← Collez l'URL de votre service Render.com puis cliquez Tester.</div>
+    <button id="btn-wake" onclick="wakeBackend()">⏰ Réveiller le backend (peut prendre 60s…)</button>
+  </div>
+
+  <div id="drop-zone" class="disabled" onclick="document.getElementById('file-input').click()">
+    <span class="dz-icon">⬡</span>
+    <div class="dz-main">Déposez votre <strong>PDF</strong> ici<br/>ou cliquez pour parcourir</div>
+    <div class="dz-sub" id="dz-sub">Connectez d'abord le backend ci-dessus</div>
+  </div>
+  <input type="file" id="file-input" accept=".pdf"/>
+
+  <div id="progress-wrap">
+    <div class="prog-track"><div class="prog-fill" id="prog-fill"></div></div>
+    <div class="prog-label" id="prog-label"></div>
+    <div class="prog-sublabel" id="prog-sublabel"></div>
+  </div>
+  <div id="error-box"></div>
+
+  <div id="report">
+    <div class="section-label">Analyse du document</div>
+    <div class="score-row">
+      <div class="score-num" id="score-num">—</div>
+      <div class="score-meta">
+        <div class="score-title">Score d'impression</div>
+        <div class="score-desc" id="score-desc"></div>
+      </div>
+    </div>
+    <div class="info-grid" id="info-grid"></div>
+    <div class="section-label">Recommandations</div>
+    <ul class="reco-list" id="reco-list"></ul>
+    <div class="section-label">Options</div>
+    <div class="options-wrap" id="opts-wrap"></div>
+    <button class="btn btn-dark" id="btn-opt" onclick="runOptimize()">→ Optimiser pour l'impression</button>
+    <div class="steps-box" id="steps-box">
+      <div class="section-label" style="margin-top:4px">Transformations appliquées</div>
+      <ul id="steps-list"></ul>
+    </div>
+    <a id="btn-dl" class="btn btn-go" download="print-ready.pdf">↓ Télécharger le PDF print-ready</a>
+    <button class="btn btn-light" onclick="resetApp()">↺ Nouveau fichier</button>
+  </div>
+
+  <footer>PDF-PRINT-READY · GHOSTSCRIPT · PYMUPDF · RENDER.COM FREE</footer>
+</div>
+
+<script>
+let fileId = null;
+let backendOk = false;
+const opts = { a4: true, upscale: true, cmyk: true };
+
+function getUrl() {
+  return document.getElementById('api-url').value.trim().replace(/\/$/, '');
+}
+
+async function checkBackend() {
+  const dot  = document.getElementById('status-dot');
+  const hint = document.getElementById('config-hint');
+  const url  = getUrl();
+  if (!url) { hint.textContent = '← Collez l\'URL Render.com.'; dot.className='status-dot'; return; }
+
+  dot.className = 'status-dot checking';
+  hint.textContent = 'Vérification…';
+  localStorage.setItem('pdf_api_url', url);
+
+  try {
+    const r = await fetch(url + '/', { signal: AbortSignal.timeout(10000) });
+    if (r.ok) {
+      dot.className = 'status-dot ok';
+      hint.innerHTML = '✅ Backend connecté — uploadez votre PDF.';
+      document.getElementById('btn-wake').style.display = 'none';
+      document.getElementById('drop-zone').classList.remove('disabled');
+      document.getElementById('dz-sub').textContent = 'Traitement serveur · Ghostscript · 300 DPI réel';
+      backendOk = true;
+    } else { throw new Error('HTTP ' + r.status); }
+  } catch(e) {
+    dot.className = 'status-dot err';
+    backendOk = false;
+    if (e.name === 'TimeoutError' || e.name === 'TypeError') {
+      hint.innerHTML = '⚠️ Backend endormi ou URL incorrecte. Sur Render free, le service s\'endort après 15min. Cliquez ci-dessous pour le réveiller.';
+      document.getElementById('btn-wake').style.display = 'block';
+    } else {
+      hint.innerHTML = '❌ ' + e.message + ' — vérifiez l\'URL Render.';
+    }
+  }
+}
+
+async function wakeBackend() {
+  const btn  = document.getElementById('btn-wake');
+  const hint = document.getElementById('config-hint');
+  const dot  = document.getElementById('status-dot');
+  btn.disabled = true;
+  dot.className = 'status-dot checking';
+  const url = getUrl();
+  const start = Date.now();
+
+  const tick = setInterval(() => {
+    hint.textContent = 'Démarrage… ' + Math.round((Date.now()-start)/1000) + 's (max 90s)';
+  }, 1000);
+
+  let ok = false;
+  while (Date.now() - start < 90000) {
+    try {
+      const r = await fetch(url + '/', { signal: AbortSignal.timeout(12000) });
+      if (r.ok) { ok = true; break; }
+    } catch(e) { /* encore en démarrage */ }
+    await new Promise(res => setTimeout(res, 4000));
+  }
+
+  clearInterval(tick);
+  btn.disabled = false;
+
+  if (ok) {
+    dot.className = 'status-dot ok';
+    hint.innerHTML = '✅ Backend réveillé ! Uploadez votre PDF.';
+    btn.style.display = 'none';
+    document.getElementById('drop-zone').classList.remove('disabled');
+    document.getElementById('dz-sub').textContent = 'Traitement serveur · Ghostscript · 300 DPI réel';
+    backendOk = true;
+  } else {
+    dot.className = 'status-dot err';
+    hint.innerHTML = '❌ Pas de réponse. Vérifiez le tableau de bord Render.com.';
+    btn.textContent = '⏰ Réessayer';
+  }
+}
+
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); if(backendOk) dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  if (!backendOk) return;
+  const f = e.dataTransfer.files[0];
+  if (f?.type === 'application/pdf') handleFile(f);
+  else showErr('Fichier PDF requis.');
+});
+document.getElementById('file-input').addEventListener('change', e => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+async function handleFile(file) {
+  clearErr();
+  document.getElementById('report').style.display = 'none';
+  document.getElementById('btn-dl').style.display = 'none';
+  document.getElementById('steps-box').style.display = 'none';
+
+  const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+  setProgress(2, 'Envoi du fichier (' + sizeMB + ' MB)…', 'Upload vers le serveur Render.com');
+
+  try {
+    const form = new FormData();
+    form.append('file', file);
+
+    const data = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.onprogress = e => {
+        if (e.total) {
+          const pct = Math.round(e.loaded / e.total * 60);
+          setProgress(pct, 'Upload : ' + Math.round(e.loaded/e.total*100) + '%', sizeMB + ' MB en cours…');
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status === 0) {
+          reject(new Error('Pas de réponse du serveur. Le backend est peut-être endormi — testez la connexion.'));
+          return;
+        }
+        try {
+          const d = JSON.parse(xhr.responseText);
+          if (xhr.status >= 400) reject(new Error(d.detail || 'Erreur serveur ' + xhr.status));
+          else resolve(d);
+        } catch(e) {
+          reject(new Error('Réponse illisible du serveur (statut ' + xhr.status + '). Testez l\'URL backend.'));
+        }
+      };
+
+      xhr.onerror   = () => reject(new Error('Connexion refusée. Vérifiez l\'URL et que le backend est démarré.'));
+      xhr.ontimeout = () => reject(new Error('Timeout après 2 minutes. Fichier trop lourd ou serveur endormi.'));
+      xhr.timeout   = 120000;
+      xhr.open('POST', getUrl() + '/analyze');
+      xhr.send(form);
+    });
+
+    fileId = data.file_id;
+    setProgress(95, 'Analyse terminée…', data.total_pages + ' page(s) analysée(s)');
+    setTimeout(() => {
+      document.getElementById('progress-wrap').style.display = 'none';
+      renderReport(data);
+    }, 400);
+
+  } catch(e) {
+    document.getElementById('progress-wrap').style.display = 'none';
+    showErr(e.message);
+  }
+}
+
+function renderReport(d) {
+  const sn = document.getElementById('score-num');
+  sn.textContent = d.score + '/100';
+  sn.className = 'score-num ' + (d.score>=80?'good':d.score>=50?'med':'bad');
+  document.getElementById('score-desc').textContent =
+    d.score>=80?'Bon pour l\'impression.':d.score>=50?'Optimisations recommandées.':'Corrections nécessaires.';
+
+  const p0 = d.pages?.[0];
+  document.getElementById('info-grid').innerHTML = [
+    [d.total_pages, 'Pages'],
+    [d.size_mb + ' MB', 'Taille'],
+    [p0 ? p0.w_mm+'×'+p0.h_mm+' mm' : '?', 'Format page 1'],
+    [(d.min_dpi||'?') + ' DPI', 'Résolution réelle'],
+  ].map(([v,l]) => `<div class="info-cell"><div class="val">${v}</div><div class="lbl">${l}</div></div>`).join('');
+
+  document.getElementById('reco-list').innerHTML =
+    (d.recommendations||[]).map(r=>`<li class="reco-item ${r.type}">${r.text}</li>`).join('');
+
+  const ol = [
+    { id:'a4',      label:'Convertir toutes les pages en A4',  on: d.non_a4_count > 0 },
+    { id:'upscale', label:'Upscaling 300 DPI (Ghostscript)',    on: true },
+    { id:'cmyk',    label:'Convertir les couleurs en CMYK',     on: true },
+  ];
+  ol.forEach(o => opts[o.id] = o.on);
+  document.getElementById('opts-wrap').innerHTML = ol.map(o=>`
+    <div class="opt-row" onclick="toggleOpt('${o.id}')">
+      <span>${o.label}</span>
+      <div class="opt-check ${o.on?'on':''}" id="chk-${o.id}">${o.on?'✓':''}</div>
+    </div>`).join('');
+
+  document.getElementById('report').style.display = 'block';
+  document.getElementById('btn-opt').disabled = false;
+}
+
+function toggleOpt(id) {
+  opts[id] = !opts[id];
+  const el = document.getElementById('chk-'+id);
+  el.className = 'opt-check' + (opts[id]?' on':'');
+  el.textContent = opts[id]?'✓':'';
+}
+
+async function runOptimize() {
+  document.getElementById('btn-opt').disabled = true;
+  document.getElementById('btn-dl').style.display = 'none';
+  document.getElementById('steps-box').style.display = 'none';
+  clearErr();
+  setProgress(5, 'Démarrage de l\'optimisation…', 'Envoi vers Ghostscript');
+
+  let elapsed = 0;
+  const timer = setInterval(() => {
+    elapsed += 5;
+    setProgress(Math.min(10+elapsed, 88), 'Optimisation en cours… ('+elapsed+'s)', 'Ghostscript travaille — patientez');
+  }, 5000);
+
+  try {
+    const res = await fetch(getUrl() + '/optimize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_id: fileId, convert_a4: opts.a4, upscale_images: opts.upscale, convert_cmyk: opts.cmyk }),
+      signal: AbortSignal.timeout(300000)
+    });
+    clearInterval(timer);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erreur ' + res.status);
+
+    setProgress(100, 'Terminé !', data.original_mb+' MB → '+data.optimized_mb+' MB'+(data.saved_percent>0?' (−'+data.saved_percent+'%)':''));
+
+    if (data.steps_applied?.length) {
+      document.getElementById('steps-list').innerHTML = data.steps_applied.map(s=>`<li>${s}</li>`).join('');
+      document.getElementById('steps-box').style.display = 'block';
+    }
+    document.getElementById('reco-list').innerHTML +=
+      `<li class="reco-item ok">✅ ${data.original_mb} MB → ${data.optimized_mb} MB${data.saved_percent>0?' (−'+data.saved_percent+'%)':''}</li>`;
+
+    const dl = document.getElementById('btn-dl');
+    dl.href = getUrl() + data.download_url;
+    dl.style.display = 'block';
+    setTimeout(()=>document.getElementById('progress-wrap').style.display='none', 800);
+
+  } catch(e) {
+    clearInterval(timer);
+    document.getElementById('progress-wrap').style.display = 'none';
+    showErr(e.message);
+    document.getElementById('btn-opt').disabled = false;
+  }
+}
+
+function resetApp() {
+  fileId = null;
+  ['report','error-box','progress-wrap'].forEach(id=>document.getElementById(id).style.display='none');
+  document.getElementById('file-input').value = '';
+  document.getElementById('btn-opt').disabled = false;
+}
+function setProgress(pct, label, sub='') {
+  document.getElementById('progress-wrap').style.display = 'block';
+  document.getElementById('prog-fill').style.width = pct+'%';
+  document.getElementById('prog-label').textContent = label;
+  document.getElementById('prog-sublabel').textContent = sub;
+}
+function showErr(msg) {
+  const el = document.getElementById('error-box');
+  el.style.display = 'block';
+  el.innerHTML = '<strong>⚠ Erreur</strong>' + msg;
+}
+function clearErr() { document.getElementById('error-box').style.display='none'; }
+
+window.addEventListener('load', () => {
+  const s = localStorage.getItem('pdf_api_url');
+  if (s) { document.getElementById('api-url').value = s; checkBackend(); }
+});
+document.getElementById('api-url').addEventListener('input', ()=>localStorage.setItem('pdf_api_url', getUrl()));
+</script>
+</body>
+</html>
