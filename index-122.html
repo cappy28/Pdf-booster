@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PDF Print-Ready</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --ink:   #0f0e0c;
+  --paper: #f5f0e8;
+  --cream: #ede7d9;
+  --accent:#c8410a;
+  --soft:  #7a7060;
+  --ok:    #2d6a4f;
+  --warn:  #b5451b;
+  --info:  #1a5276;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Mono',monospace;background:var(--paper);color:var(--ink);min-height:100vh;padding:40px 20px 80px}
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:0;opacity:.5}
+.wrap{max-width:640px;margin:0 auto;position:relative;z-index:1}
+header{margin-bottom:48px;border-bottom:2px solid var(--ink);padding-bottom:20px}
+header .label{font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--soft);margin-bottom:6px}
+header h1{font-family:'Fraunces',serif;font-size:2.8rem;font-weight:700;line-height:1.05;letter-spacing:-.02em}
+header h1 em{font-style:italic;color:var(--accent)}
+header p{font-size:.8rem;color:var(--soft);margin-top:10px;line-height:1.7}
+
+/* Backend URL config */
+.config-row{display:flex;gap:8px;margin-bottom:20px;align-items:center}
+.config-row input{flex:1;padding:10px 12px;border:1px solid var(--ink);background:white;font-family:'DM Mono',monospace;font-size:.75rem;border-radius:2px;outline:none}
+.config-row input:focus{border-color:var(--accent)}
+.config-row .tag{font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;color:var(--soft);white-space:nowrap}
+.status-dot{width:8px;height:8px;border-radius:50%;background:#ccc;flex-shrink:0;transition:background .3s}
+.status-dot.ok{background:#48bb78}
+.status-dot.err{background:#f56565}
+
+#drop-zone{border:2px solid var(--ink);border-radius:2px;padding:52px 24px;text-align:center;cursor:pointer;transition:background .2s;position:relative;overflow:hidden;background:white}
+#drop-zone::before{content:'';position:absolute;inset:4px;border:1px dashed var(--ink);opacity:.2;pointer-events:none}
+#drop-zone:hover,#drop-zone.drag{background:var(--cream)}
+#drop-zone .dz-icon{font-size:2.4rem;margin-bottom:14px;display:block}
+#drop-zone .dz-main{font-family:'Fraunces',serif;font-size:1.1rem;font-weight:300}
+#drop-zone .dz-main strong{font-weight:700}
+#drop-zone .dz-sub{font-size:.72rem;color:var(--soft);margin-top:8px;letter-spacing:.05em}
+#file-input{display:none}
+
+#progress-wrap{display:none;margin-top:24px}
+.prog-track{background:var(--cream);border:1px solid var(--ink);height:6px;border-radius:99px;overflow:hidden}
+.prog-fill{height:100%;background:var(--ink);width:0%;transition:width .5s cubic-bezier(.4,0,.2,1);border-radius:99px}
+.prog-label{font-size:.72rem;color:var(--soft);margin-top:8px;letter-spacing:.04em}
+
+#error-box{display:none;margin-top:16px;padding:14px 16px;background:#fdf0ec;border:1px solid var(--accent);border-radius:2px;font-size:.8rem;color:var(--accent);line-height:1.6}
+
+#report{display:none;margin-top:36px}
+.section-label{font-size:.65rem;letter-spacing:.2em;text-transform:uppercase;color:var(--soft);margin-bottom:12px}
+
+.score-row{display:flex;align-items:flex-end;gap:16px;padding:20px 24px;background:var(--ink);color:var(--paper);border-radius:2px;margin-bottom:24px}
+.score-num{font-family:'Fraunces',serif;font-size:3.6rem;font-weight:700;line-height:1}
+.score-num.good{color:#a8e6cf}.score-num.med{color:#ffd166}.score-num.bad{color:#ff6b6b}
+.score-meta{flex:1}
+.score-title{font-size:.85rem;font-weight:500;margin-bottom:4px}
+.score-desc{font-size:.75rem;opacity:.6;line-height:1.5}
+
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:24px}
+.info-cell{padding:14px 16px;background:white;border:1px solid var(--cream)}
+.info-cell .val{font-family:'Fraunces',serif;font-size:1.3rem;font-weight:700;letter-spacing:-.01em}
+.info-cell .lbl{font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--soft);margin-top:2px}
+
+.reco-list{list-style:none;margin-bottom:28px}
+.reco-item{display:flex;gap:10px;align-items:flex-start;padding:11px 14px;border-left:3px solid;border-radius:0 2px 2px 0;font-size:.8rem;line-height:1.6;margin-bottom:6px;background:white}
+.reco-item.ok{border-color:var(--ok);color:var(--ok)}
+.reco-item.warn{border-color:var(--warn);color:var(--warn)}
+.reco-item.info{border-color:var(--info);color:var(--info)}
+
+.options-wrap{background:var(--cream);border:1px solid var(--ink);padding:20px;margin-bottom:20px;border-radius:2px}
+.opt-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.08);font-size:.82rem;cursor:pointer}
+.opt-row:last-child{border-bottom:none;padding-bottom:0}
+.opt-row:first-child{padding-top:0}
+.opt-check{width:20px;height:20px;border:2px solid var(--ink);border-radius:2px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s;font-size:.7rem}
+.opt-check.on{background:var(--ink);color:var(--paper)}
+
+.btn{display:block;width:100%;padding:16px;border:2px solid var(--ink);border-radius:2px;font-family:'DM Mono',monospace;font-size:.82rem;font-weight:500;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:all .15s;text-align:center;text-decoration:none}
+.btn-dark{background:var(--ink);color:var(--paper)}
+.btn-dark:hover:not(:disabled){background:var(--accent);border-color:var(--accent)}
+.btn-dark:disabled{opacity:.4;cursor:not-allowed}
+.btn-light{background:white;color:var(--ink);margin-top:10px}
+.btn-light:hover{background:var(--cream)}
+.btn-go{display:none;background:#1a7a4a;color:white;border-color:#1a7a4a;margin-top:10px;font-size:.9rem}
+.btn-go:hover{background:#155f39;border-color:#155f39}
+
+.steps-list{margin:12px 0 20px;list-style:none}
+.steps-list li{font-size:.75rem;color:var(--ok);padding:4px 0;border-bottom:1px solid var(--cream)}
+.steps-list li::before{content:'✓ ';font-weight:bold}
+
+footer{margin-top:60px;font-size:.68rem;color:var(--soft);letter-spacing:.08em;text-align:center;opacity:.7}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.fade-up{animation:fadeUp .35s ease both}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="label">Outil gratuit — backend réel</div>
+    <h1>PDF<br/><em>Print-Ready</em></h1>
+    <p>Analyse réelle des DPI · Upscaling 300 DPI · Conversion CMYK · Ghostscript</p>
+  </header>
+
+  <!-- Config backend -->
+  <div class="section-label">URL du backend (Render.com)</div>
+  <div class="config-row">
+    <div class="status-dot" id="status-dot"></div>
+    <span class="tag">API</span>
+    <input type="text" id="api-url" placeholder="https://pdf-print-ready-api.onrender.com"
+           onchange="checkBackend()" onblur="checkBackend()"/>
+  </div>
+
+  <!-- Drop zone -->
+  <div id="drop-zone" onclick="document.getElementById('file-input').click()">
+    <span class="dz-icon">⬡</span>
+    <div class="dz-main">Déposez votre <strong>PDF</strong> ici<br/>ou cliquez pour parcourir</div>
+    <div class="dz-sub">Traitement côté serveur · Ghostscript · 300 DPI réel</div>
+  </div>
+  <input type="file" id="file-input" accept=".pdf"/>
+
+  <div id="progress-wrap">
+    <div class="prog-track"><div class="prog-fill" id="prog-fill"></div></div>
+    <div class="prog-label" id="prog-label">Chargement…</div>
+  </div>
+  <div id="error-box"></div>
+
+  <div id="report" class="fade-up">
+    <div class="section-label">Analyse du document</div>
+    <div class="score-row">
+      <div class="score-num" id="score-num">—</div>
+      <div class="score-meta">
+        <div class="score-title">Score d'impression</div>
+        <div class="score-desc" id="score-desc"></div>
+      </div>
+    </div>
+    <div class="info-grid" id="info-grid"></div>
+    <div class="section-label">Recommandations</div>
+    <ul class="reco-list" id="reco-list"></ul>
+    <div class="section-label">Options d'optimisation</div>
+    <div class="options-wrap" id="opts-wrap"></div>
+    <button class="btn btn-dark" id="btn-opt" onclick="runOptimize()">→ Optimiser pour l'impression</button>
+    <div id="steps-result" style="display:none">
+      <div class="section-label" style="margin-top:20px">Transformations appliquées</div>
+      <ul class="steps-list" id="steps-list"></ul>
+    </div>
+    <a id="btn-dl" class="btn btn-go" download="print-ready.pdf">↓ Télécharger le PDF print-ready</a>
+    <button class="btn btn-light" onclick="resetApp()">↺ Nouveau fichier</button>
+  </div>
+
+  <footer>PDF-PRINT-READY · GHOSTSCRIPT · PYMUPDF · 300 DPI RÉEL</footer>
+</div>
+
+<script>
+let fileId = null;
+let analysisData = null;
+const opts = { a4: true, upscale: true, cmyk: true };
+
+function getApiUrl() {
+  const v = document.getElementById('api-url').value.trim();
+  return v.replace(/\/$/, '');
+}
+
+async function checkBackend() {
+  const dot = document.getElementById('status-dot');
+  const url = getApiUrl();
+  if (!url) { dot.className = 'status-dot'; return; }
+  try {
+    const r = await fetch(url + '/', { signal: AbortSignal.timeout(5000) });
+    dot.className = r.ok ? 'status-dot ok' : 'status-dot err';
+  } catch { dot.className = 'status-dot err'; }
+}
+
+// Drag & drop
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type === 'application/pdf') handleFile(f);
+  else showErr('Fichier PDF requis.');
+});
+document.getElementById('file-input').addEventListener('change', e => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+async function handleFile(file) {
+  const url = getApiUrl();
+  if (!url) { showErr('Entrez d\'abord l\'URL de votre backend Render.com.'); return; }
+
+  clearErr();
+  setProgress(5, 'Envoi du fichier…');
+  document.getElementById('report').style.display = 'none';
+  document.getElementById('btn-dl').style.display = 'none';
+
+  try {
+    const form = new FormData();
+    form.append('file', file);
+
+    const xhr = new XMLHttpRequest();
+    xhr.upload.onprogress = e => {
+      if (e.total) setProgress(Math.round(e.loaded / e.total * 40), 'Upload en cours…');
+    };
+
+    const res = await new Promise((resolve, reject) => {
+      xhr.onload  = () => resolve(JSON.parse(xhr.responseText));
+      xhr.onerror = () => reject(new Error('Erreur réseau'));
+      xhr.open('POST', url + '/analyze');
+      xhr.send(form);
+    });
+
+    if (res.detail) throw new Error(res.detail);
+
+    setProgress(90, 'Analyse terminée…');
+    analysisData = res;
+    fileId = res.file_id;
+
+    setTimeout(() => {
+      document.getElementById('progress-wrap').style.display = 'none';
+      renderReport(res);
+    }, 400);
+
+  } catch(e) {
+    document.getElementById('progress-wrap').style.display = 'none';
+    showErr('Erreur : ' + e.message + '. Vérifiez l\'URL du backend.');
+  }
+}
+
+function renderReport(d) {
+  const sn = document.getElementById('score-num');
+  sn.textContent = d.score + '/100';
+  sn.className = 'score-num ' + (d.score>=80?'good':d.score>=50?'med':'bad');
+  document.getElementById('score-desc').textContent =
+    d.score>=80 ? 'Bon pour l\'impression.' :
+    d.score>=50 ? 'Quelques optimisations recommandées.' : 'Corrections nécessaires.';
+
+  document.getElementById('info-grid').innerHTML = [
+    [d.total_pages,          'Pages'],
+    [d.size_mb + ' MB',      'Taille fichier'],
+    [d.pages[0]?.w_mm + '×' + d.pages[0]?.h_mm + 'mm', 'Format page 1'],
+    [(d.min_dpi || '?') + ' DPI', 'Résolution réelle'],
+  ].map(([v,l]) => `<div class="info-cell"><div class="val">${v}</div><div class="lbl">${l}</div></div>`).join('');
+
+  document.getElementById('reco-list').innerHTML =
+    d.recommendations.map(r => `<li class="reco-item ${r.type}">${r.text}</li>`).join('');
+
+  const optsList = [
+    { id:'a4',      label:'Convertir toutes les pages en A4', on: d.non_a4_count > 0 },
+    { id:'upscale', label:'Upscaling 300 DPI réel (Ghostscript)', on: d.low_res_count > 0 || true },
+    { id:'cmyk',    label:'Convertir les couleurs en CMYK', on: true },
+  ];
+  optsList.forEach(o => opts[o.id] = o.on);
+  document.getElementById('opts-wrap').innerHTML = optsList.map(o => `
+    <div class="opt-row" onclick="toggleOpt('${o.id}')">
+      <span>${o.label}</span>
+      <div class="opt-check ${o.on?'on':''}" id="chk-${o.id}">${o.on?'✓':''}</div>
+    </div>`).join('');
+
+  document.getElementById('report').style.display = 'block';
+  document.getElementById('btn-opt').disabled = false;
+  document.getElementById('steps-result').style.display = 'none';
+}
+
+function toggleOpt(id) {
+  opts[id] = !opts[id];
+  const el = document.getElementById('chk-'+id);
+  el.className = 'opt-check ' + (opts[id]?'on':'');
+  el.textContent = opts[id] ? '✓' : '';
+}
+
+async function runOptimize() {
+  const url = getApiUrl();
+  document.getElementById('btn-opt').disabled = true;
+  document.getElementById('btn-dl').style.display = 'none';
+  document.getElementById('steps-result').style.display = 'none';
+  clearErr();
+  setProgress(10, 'Envoi des paramètres…');
+
+  try {
+    setProgress(30, 'Optimisation en cours (peut prendre 30-60s)…');
+    const res = await fetch(url + '/optimize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        file_id:        fileId,
+        convert_a4:     opts.a4,
+        upscale_images: opts.upscale,
+        convert_cmyk:   opts.cmyk,
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erreur serveur');
+
+    setProgress(100, 'Terminé !');
+
+    // Afficher les étapes appliquées
+    if (data.steps_applied?.length) {
+      document.getElementById('steps-list').innerHTML =
+        data.steps_applied.map(s => `<li>${s}</li>`).join('');
+      document.getElementById('steps-result').style.display = 'block';
+    }
+
+    // Stats
+    const saved = data.saved_percent;
+    document.getElementById('reco-list').innerHTML +=
+      `<li class="reco-item ok">${data.original_mb} MB → ${data.optimized_mb} MB${saved>0?' (−'+saved+'%)':''}</li>`;
+
+    // Lien téléchargement
+    const dl = document.getElementById('btn-dl');
+    dl.href = url + data.download_url;
+    dl.style.display = 'block';
+
+    setTimeout(() => document.getElementById('progress-wrap').style.display = 'none', 600);
+
+  } catch(e) {
+    document.getElementById('progress-wrap').style.display = 'none';
+    showErr('Erreur optimisation : ' + e.message);
+    document.getElementById('btn-opt').disabled = false;
+  }
+}
+
+function resetApp() {
+  fileId = null; analysisData = null;
+  ['report','error-box','progress-wrap'].forEach(id =>
+    document.getElementById(id).style.display = 'none');
+  document.getElementById('file-input').value = '';
+}
+function setProgress(pct, label) {
+  document.getElementById('progress-wrap').style.display = 'block';
+  document.getElementById('prog-fill').style.width = pct + '%';
+  document.getElementById('prog-label').textContent = label;
+}
+function showErr(msg) {
+  const el = document.getElementById('error-box');
+  el.textContent = '⚠ ' + msg; el.style.display = 'block';
+}
+function clearErr() { document.getElementById('error-box').style.display = 'none'; }
+
+// Vérifier le backend au chargement si une URL est déjà stockée
+window.addEventListener('load', () => {
+  const saved = localStorage.getItem('pdf_api_url');
+  if (saved) { document.getElementById('api-url').value = saved; checkBackend(); }
+});
+document.getElementById('api-url').addEventListener('input', e => {
+  localStorage.setItem('pdf_api_url', e.target.value);
+});
+</script>
+</body>
+</html>
